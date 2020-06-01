@@ -1,0 +1,88 @@
+version: '3.7'
+
+services:
+  nats1:
+    container_name: nats_1
+    image: nats-streaming
+    volumes:
+    - ./cluster/config-1.conf:/config.conf
+    command: -m 8222 --config /config.conf -SDV
+    # 172.21.0.5:4222 based on cluster-info curl http://127.0.0.1:8222/varz
+    expose:
+      - 8222
+    ports:
+      - 8222:8222
+  nats2:
+    container_name: nats_2
+    image: nats-streaming
+    volumes:
+    - ./cluster/config-2.conf:/config.conf
+    command: -m 8222 --config /config.conf -SDV
+   
+  nats3:
+    container_name: nats_3
+    image: nats-streaming
+    volumes:
+    - ./cluster/config-3.conf:/config.conf
+    command: -m 8222 --config /config.conf -SDV 
+
+  neatflyx:
+    container_name: neatflyx
+    build: 
+      context: ./neatflyx
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    depends_on:
+     - nats1
+    environment:
+      SERVER_ADDR: :9000
+      NATS_ADDR: nats://nats1:4222
+      NATS_CLUSTER_ID: test-cluster
+      NATS_PUB_EPI_TOPIC: episodes:publish
+
+  watcher_curious:
+    container_name: watcher_curious
+    build: 
+      context: ./watcher
+    restart: unless-stopped
+    depends_on:
+      - nats1
+    environment:
+      TYPE: curious 
+      NATS_ADDR: nats://nats1:4222
+      NATS_CLUSTER_ID: test-cluster
+      NATS_PUB_EPI_TOPIC: episodes:publish
+      START_OPT: MOST_RECENT
+
+  watcher_patient:
+    container_name: watcher_patient
+    build: 
+      context: ./watcher
+    restart: unless-stopped
+    depends_on:
+      - nats1
+    environment:
+      TYPE: patient
+      NATS_ADDR: nats://nats1:4222
+      NATS_CLUSTER_ID: test-cluster
+      NATS_PUB_EPI_TOPIC: episodes:publish
+      START_OPT: ONLY_NEW
+
+  watcher_binge:
+    container_name: watcher_binge
+    build: 
+      context: ./watcher
+    restart: unless-stopped
+    depends_on:
+      - nats1
+    environment:
+      TYPE: binge
+      NATS_ADDR: nats://nats1:4222
+      NATS_CLUSTER_ID: test-cluster
+      NATS_PUB_EPI_TOPIC: episodes:publish
+      START_OPT: ALL
+
+networks:
+  default:
+    driver: bridge
